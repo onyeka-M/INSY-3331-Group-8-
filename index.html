@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ReturnPulse - Return Deadline & Confirmation Manager</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Google Fonts Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-200">
+
+  <!-- Top Navigation Header -->
+  <header class="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+          <i data-lucide="package-check" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-xl tracking-tight text-slate-900 dark:text-white">ReturnPulse</h1>
+            <span class="text-xs px-2 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">INSY 3331 Group 8</span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Return Deadline Reminders & Processed Return Confirmation</p>
+        </div>
+      </div>
+
+      <!-- Action items -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <button id="btn-ai-helper" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 bg-indigo-50/70 dark:bg-indigo-950/40 hover:bg-indigo-100 transition shadow-sm">
+          <i data-lucide="sparkles" class="w-4 h-4 text-indigo-500"></i>
+          <span>AI Policy Assistant</span>
+        </button>
+
+        <button id="btn-request-notifications" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <i data-lucide="bell" class="w-4 h-4 text-amber-500"></i>
+          <span id="notif-status-text">Enable Alerts</span>
+        </button>
+
+        <button id="btn-add-item" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/30 transition">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          <span>Track Purchase</span>
+        </button>
+
+        <button id="theme-toggle" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Toggle theme">
+          <i data-lucide="moon" class="w-4 h-4 hidden dark:block"></i>
+          <i data-lucide="sun" class="w-4 h-4 block dark:hidden"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- KPI / Summary Metrics Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <!-- Total at risk -->
+      <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Money at Risk</p>
+          <h3 id="stat-money-at-risk" class="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-0.5">$0.00</h3>
+          <p class="text-[11px] text-slate-400 mt-1">Pending active returns</p>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+          <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+        </div>
+      </div>
+
+      <!-- Urgent Return Deadlines -->
+      <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Urgent Deadlines</p>
+          <h3 id="stat-urgent-count" class="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-0.5">0</h3>
+          <p class="text-[11px] text-rose-500 mt-1">&le; 3 days remaining</p>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+          <i data-lucide="clock" class="w-5 h-5"></i>
+        </div>
+      </div>
+
+      <!-- In Progress / Dropped Off -->
+      <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-500 dark:text-slate-400">In Return Process</p>
+          <h3 id="stat-processing-count" class="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-0.5">0</h3>
+          <p class="text-[11px] text-blue-500 mt-1">Shipped or dropped off</p>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+          <i data-lucide="truck" class="w-5 h-5"></i>
+        </div>
+      </div>
+
+      <!-- Total Refunded / Recovered -->
+      <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Recovered Refunds</p>
+          <h3 id="stat-total-recovered" class="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">$0.00</h3>
+          <p id="stat-confirmed-count" class="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">0 confirmed returns</p>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+          <i data-lucide="shield-check" class="w-5 h-5"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter & Search Control Bar -->
+    <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+      <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+        <!-- Search -->
+        <div class="relative flex-1">
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+          <input type="text" id="search-input" placeholder="Search by item, store name, order or RMA #..." 
+                 class="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <!-- Filter Selects -->
+        <div class="flex items-center gap-2">
+          <select id="filter-store" class="text-xs sm:text-sm py-2 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none">
+            <option value="ALL">All Stores</option>
+            <option value="Amazon">Amazon</option>
+            <option value="Target">Target</option>
+            <option value="Best Buy">Best Buy</option>
+            <option value="Apple">Apple</option>
+            <option value="Walmart">Walmart</option>
+            <option value="Costco">Costco</option>
+            <option value="Nike">Nike</option>
+            <option value="Other">Other / Specialty</option>
+          </select>
+
+          <select id="sort-by" class="text-xs sm:text-sm py-2 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none">
+            <option value="deadline-asc">Deadline (Soonest First)</option>
+            <option value="deadline-desc">Deadline (Latest First)</option>
+            <option value="price-desc">Price (Highest First)</option>
+            <option value="price-asc">Price (Lowest First)</option>
+            <option value="recent">Recently Added</option>
+          </select>
+
+          <!-- View Mode Toggle -->
+          <div class="hidden sm:flex border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 bg-slate-100 dark:bg-slate-900">
+            <button id="view-grid-btn" class="p-1.5 rounded text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-800 shadow-xs" title="Grid View">
+              <i data-lucide="layout-grid" class="w-4 h-4"></i>
+            </button>
+            <button id="view-table-btn" class="p-1.5 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" title="Table View">
+              <i data-lucide="list" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Status Filter Pills -->
+      <div class="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 text-xs">
+        <button class="status-pill active px-3 py-1 rounded-full font-medium transition bg-slate-900 text-white dark:bg-white dark:text-slate-900" data-status="ALL">
+          All (<span id="count-all">0</span>)
+        </button>
+        <button class="status-pill px-3 py-1 rounded-full font-medium transition bg-slate-100 text-slate-700 dark:bg-slate-700/60 dark:text-slate-300 hover:bg-slate-200" data-status="ACTIVE">
+          Active Window (<span id="count-active">0</span>)
+        </button>
+        <button class="status-pill px-3 py-1 rounded-full font-medium transition bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 hover:bg-rose-200" data-status="URGENT">
+          🔥 Urgent (<span id="count-urgent">0</span>)
+        </button>
+        <button class="status-pill px-3 py-1 rounded-full font-medium transition bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 hover:bg-blue-200" data-status="PROCESSING">
+          📦 In Return (<span id="count-proc">0</span>)
+        </button>
+        <button class="status-pill px-3 py-1 rounded-full font-medium transition bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 hover:bg-emerald-200" data-status="CONFIRMED">
+          ✅ Confirmed & Refunded (<span id="count-conf">0</span>)
+        </button>
+        <button class="status-pill px-3 py-1 rounded-full font-medium transition bg-slate-100 text-slate-700 dark:bg-slate-700/60 dark:text-slate-300 hover:bg-slate-200" data-status="EXPIRED">
+          ❌ Missed / Expired (<span id="count-exp">0</span>)
+        </button>
+        <button class="status-pill px-3 py-1 rounded-full font-medium transition bg-slate-100 text-slate-700 dark:bg-slate-700/60 dark:text-slate-300 hover:bg-slate-200" data-status="KEPT">
+          Decided to Keep (<span id="count-kept">0</span>)
+        </button>
+      </div>
+    </div>
+
+    <!-- Urgent Alerts Banner (Only shown if items &le; 2 days) -->
+    <div id="urgent-banner" class="hidden bg-rose-50 border-l-4 border-rose-500 p-4 rounded-r-xl dark:bg-rose-950/40 dark:border-rose-600 shadow-xs flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <i data-lucide="alarm-clock" class="w-6 h-6 text-rose-600 dark:text-rose-400 animate-bounce"></i>
+        <div>
+          <h4 class="text-sm font-semibold text-rose-900 dark:text-rose-200">Attention: Return Deadlines Expiring Very Soon!</h4>
+          <p id="urgent-banner-text" class="text-xs text-rose-700 dark:text-rose-300 mt-0.5">You have items that must be returned today or tomorrow to get your refund.</p>
+        </div>
+      </div>
+      <button onclick="filterUrgentOnly()" class="px-3 py-1 text-xs font-semibold bg-rose-600 text-white rounded-lg hover:bg-rose-700 shadow-xs">
+        View Items
+      </button>
+    </div>
+
+    <!-- Items Container (Grid View) -->
+    <div id="items-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <!-- Dynamically filled by app.js -->
+    </div>
+
+    <!-- Items Container (Table View) -->
+    <div id="items-table-wrapper" class="hidden bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-700 text-xs text-slate-500 font-semibold uppercase tracking-wider">
+            <tr>
+              <th class="py-3 px-4">Item & Store</th>
+              <th class="py-3 px-4">Price</th>
+              <th class="py-3 px-4">Purchased</th>
+              <th class="py-3 px-4">Return Deadline</th>
+              <th class="py-3 px-4">Status & Countdown</th>
+              <th class="py-3 px-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="items-table-body" class="divide-y divide-slate-100 dark:divide-slate-800">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div id="empty-state" class="hidden py-16 text-center bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+        <i data-lucide="package-search" class="w-8 h-8"></i>
+      </div>
+      <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">No items match your filter</h3>
+      <p class="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto mt-1 mb-5">
+        Start tracking return windows for clothes, tech, and online orders so you never forfeit a refund.
+      </p>
+      <div class="flex items-center justify-center gap-3">
+        <button onclick="document.getElementById('btn-add-item').click()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 shadow-sm">
+          + Add First Purchase
+        </button>
+        <button id="btn-load-sample" class="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700">
+          Load Sample Data
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="mt-auto border-t border-slate-200 dark:border-slate-800 py-6 text-center text-xs text-slate-400">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <p>ReturnPulse &bull; Built for INSY 3331 Group 8 &bull; UTA Artificial Intelligence for Business</p>
+      <div class="flex items-center gap-4">
+        <button id="btn-reset-demo" class="hover:text-blue-500 transition">Reset Demo Data</button>
+        <a href="https://github.com/onyeka-M/INSY-3331-Group-8-.git" target="_blank" class="hover:text-blue-500 transition flex items-center gap-1">
+          <i data-lucide="github" class="w-3.5 h-3.5"></i> GitHub Repo
+        </a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: Add / Edit Purchase & Return Window               -->
+  <!-- ======================================================== -->
+  <div id="modal-item" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white dark:bg-slate-800 w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden my-8">
+      <div class="p-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="p-2 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400">
+            <i data-lucide="tag" class="w-5 h-5"></i>
+          </div>
+          <h3 id="modal-item-title" class="font-bold text-lg text-slate-900 dark:text-white">Track Item Purchase</h3>
+        </div>
+        <button id="modal-item-close" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-item" class="p-5 space-y-4">
+        <input type="hidden" id="item-id">
+
+        <!-- Store selection with quick buttons -->
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Retailer / Store</label>
+          <div class="grid grid-cols-4 gap-1.5 mb-2">
+            <button type="button" class="store-preset-btn text-xs py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 text-center font-medium" data-store="Amazon" data-days="30">Amazon (30d)</button>
+            <button type="button" class="store-preset-btn text-xs py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 text-center font-medium" data-store="Apple" data-days="14">Apple (14d)</button>
+            <button type="button" class="store-preset-btn text-xs py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 text-center font-medium" data-store="Target" data-days="90">Target (90d)</button>
+            <button type="button" class="store-preset-btn text-xs py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 text-center font-medium" data-store="Best Buy" data-days="15">Best Buy (15d)</button>
+            <button type="button" class="store-preset-btn text-xs py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 text-center font-medium" data-store="Walmart" data-days="90">Walmart (90d)</button>
+            <button type="button" class="store-preset-btn text-xs py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 text-center font-medium" data-store="Costco" data-days="90">Costco (90d)</button>
+            <button type="button" class="store-preset-btn text-xs py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 text-center font-medium" data-store="Nike" data-days="60">Nike (60d)</button>
+            <button type="button" class="store-preset-btn text-xs py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 text-center font-medium" data-store="Zara" data-days="30">Zara (30d)</button>
+          </div>
+          <input type="text" id="item-store" required placeholder="e.g. Amazon, Best Buy, Nordstrom..." 
+                 class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <!-- Item Name & Category -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Item Description / Name</label>
+            <input type="text" id="item-name" required placeholder="e.g. Sony WH-1000XM5 Headphones" 
+                   class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Category</label>
+            <select id="item-category" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500">
+              <option value="Electronics">Electronics</option>
+              <option value="Clothing">Clothing & Shoes</option>
+              <option value="Home">Home & Kitchen</option>
+              <option value="Books">Books / School</option>
+              <option value="Beauty">Beauty / Personal</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Price & Purchase Date -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Price / Cost ($)</label>
+            <div class="relative">
+              <span class="absolute left-3 top-2 text-slate-400 font-semibold">$</span>
+              <input type="number" step="0.01" min="0" id="item-price" required placeholder="0.00" 
+                     class="w-full pl-7 pr-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Purchase Date</label>
+            <input type="date" id="item-purchase-date" required 
+                   class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500">
+          </div>
+        </div>
+
+        <!-- Return Window Calculation -->
+        <div class="bg-blue-50/50 dark:bg-blue-950/20 p-3.5 rounded-xl border border-blue-100 dark:border-blue-900/50 space-y-2">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-blue-900 dark:text-blue-300 mb-1">Return Window (Days)</label>
+              <input type="number" id="item-window-days" min="1" max="730" value="30" 
+                     class="w-full px-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-blue-900 dark:text-blue-300 mb-1">Exact Return Deadline</label>
+              <input type="date" id="item-deadline-date" required 
+                     class="w-full px-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-medium">
+            </div>
+          </div>
+          <p class="text-[11px] text-blue-600 dark:text-blue-400">
+            <i data-lucide="info" class="w-3 h-3 inline mr-1"></i>Changing either field will automatically recalculate the deadline.
+          </p>
+        </div>
+
+        <!-- Order / Receipt Number & Preferred Return Method -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Order # / Tracking #</label>
+            <input type="text" id="item-order-id" placeholder="e.g. #112-9842103-9938" 
+                   class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Return Method</label>
+            <select id="item-method" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500">
+              <option value="UPS / FedEx Drop-off">UPS / FedEx Drop-off</option>
+              <option value="In-Store Drop-off">In-Store Counter</option>
+              <option value="USPS Mail-in">USPS Mail-in</option>
+              <option value="Amazon Locker / Whole Foods">Amazon Locker / Whole Foods</option>
+              <option value="Courier Pickup">Home Pickup</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Notes / Return Reason -->
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Notes / Why might you return?</label>
+          <textarea id="item-notes" rows="2" placeholder="e.g. Trying out fit, checking if sound fits well, keep original box and tags..." 
+                    class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500"></textarea>
+        </div>
+
+        <div class="pt-2 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-700">
+          <button type="button" id="modal-item-cancel" class="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">
+            Cancel
+          </button>
+          <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm">
+            Save Purchase
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: Confirm Processed Return (Primary Requirement)    -->
+  <!-- ======================================================== -->
+  <div id="modal-confirm-return" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white dark:bg-slate-800 w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden my-8">
+      <div class="p-5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="p-2.5 rounded-xl bg-white/20 backdrop-blur">
+            <i data-lucide="check-check" class="w-6 h-6 text-white"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-lg">Confirm Processed Return</h3>
+            <p class="text-xs text-emerald-100">Record drop-off, confirmation #, and refund receipt</p>
+          </div>
+        </div>
+        <button id="modal-confirm-close" class="text-emerald-100 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-confirm-return" class="p-5 space-y-4">
+        <input type="hidden" id="confirm-item-id">
+
+        <!-- Item summary box -->
+        <div class="bg-slate-50 dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
+          <div class="flex items-center justify-between">
+            <span id="confirm-store-badge" class="text-xs font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300">Store</span>
+            <span id="confirm-item-price" class="text-sm font-bold text-slate-800 dark:text-slate-100">$0.00</span>
+          </div>
+          <h4 id="confirm-item-name" class="font-semibold text-slate-900 dark:text-white mt-1">Item Title</h4>
+          <p id="confirm-original-deadline" class="text-xs text-slate-500 mt-0.5">Original Deadline: --</p>
+        </div>
+
+        <!-- Processing Stage -->
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Return Stage</label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="flex items-center gap-2 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700">
+              <input type="radio" name="return-stage" value="PROCESSING" class="text-blue-600 focus:ring-blue-500">
+              <div class="text-xs">
+                <span class="font-bold text-blue-600 block">Dropped Off / In Transit</span>
+                <span class="text-slate-400">Shipped, waiting store refund</span>
+              </div>
+            </label>
+            <label class="flex items-center gap-2 p-2.5 rounded-lg border border-emerald-300 dark:border-emerald-700 cursor-pointer bg-emerald-50/50 dark:bg-emerald-950/20">
+              <input type="radio" name="return-stage" value="CONFIRMED" checked class="text-emerald-600 focus:ring-emerald-500">
+              <div class="text-xs">
+                <span class="font-bold text-emerald-600 block">Refund Confirmed & Completed</span>
+                <span class="text-slate-400">Refund credited / finalized</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Drop-off & Return Confirmation / RMA Details -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Return / RMA / Ref #</label>
+            <input type="text" id="confirm-rma-code" placeholder="e.g. RMA-99824 or Store Barcode #" 
+                   class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-emerald-500 font-mono">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Drop-off / Process Date</label>
+            <input type="date" id="confirm-date" required 
+                   class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-emerald-500">
+          </div>
+        </div>
+
+        <!-- Tracking / Carrier Drop-off Receipt -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Carrier / Location</label>
+            <input type="text" id="confirm-carrier" placeholder="e.g. The UPS Store, Kohl's, FedEx" 
+                   class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-emerald-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Return Tracking #</label>
+            <input type="text" id="confirm-tracking-no" placeholder="e.g. 1Z9999999999999999" 
+                   class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-emerald-500 font-mono">
+          </div>
+        </div>
+
+        <!-- Refund Breakdown -->
+        <div class="p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-900/60 space-y-2">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-emerald-900 dark:text-emerald-300 mb-1">Actual Refund Amount ($)</label>
+              <div class="relative">
+                <span class="absolute left-3 top-2 text-emerald-600 font-semibold">$</span>
+                <input type="number" step="0.01" min="0" id="confirm-refund-amount" required 
+                       class="w-full pl-7 pr-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-emerald-600">
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-emerald-900 dark:text-emerald-300 mb-1">Refund Method</label>
+              <select id="confirm-refund-method" class="w-full px-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                <option value="Original Payment Method">Original Payment Method</option>
+                <option value="Store Credit / Gift Card">Store Credit / Gift Card</option>
+                <option value="Bank Direct Deposit">Bank Direct Deposit</option>
+                <option value="Cash">Cash</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Drop-off receipt confirmation note -->
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Confirmation Notes / Receipt Slip details</label>
+          <input type="text" id="confirm-notes" placeholder="e.g. Dropped off at UPS Store counter, received paper slip with signature" 
+                 class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-emerald-500">
+        </div>
+
+        <div class="pt-3 flex items-center justify-between border-t border-slate-100 dark:border-slate-700">
+          <button type="button" id="btn-print-receipt-slip" class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900">
+            <i data-lucide="printer" class="w-4 h-4"></i>
+            Print Return Slip
+          </button>
+          <div class="flex items-center gap-2">
+            <button type="button" id="modal-confirm-cancel" class="px-3.5 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">
+              Cancel
+            </button>
+            <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm flex items-center gap-1.5">
+              <i data-lucide="shield-check" class="w-4 h-4"></i>
+              Confirm Return & Refund
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: AI Return Policy & Reason Assistant (INSY 3331)   -->
+  <!-- ======================================================== -->
+  <div id="modal-ai-assistant" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white dark:bg-slate-800 w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden my-8">
+      <div class="p-5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="p-2.5 rounded-xl bg-white/20 backdrop-blur">
+            <i data-lucide="sparkles" class="w-6 h-6 text-white"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-lg">AI Return Policy & Advisor</h3>
+            <p class="text-xs text-indigo-100">INSY 3331 AI for Business &bull; Automated policy lookup & message generator</p>
+          </div>
+        </div>
+        <button id="modal-ai-close" class="text-indigo-100 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-6">
+        <!-- Tool 1: Retailer Policy Knowledge Base -->
+        <div>
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">1. Retailer Return Policy Knowledge Base</h4>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            <button onclick="showPolicy('Amazon')" class="text-left p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-500 bg-slate-50 dark:bg-slate-900 transition">
+              <span class="text-xs font-bold block">Amazon</span>
+              <span class="text-[11px] text-slate-400">30 days standard</span>
+            </button>
+            <button onclick="showPolicy('Apple')" class="text-left p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-500 bg-slate-50 dark:bg-slate-900 transition">
+              <span class="text-xs font-bold block">Apple</span>
+              <span class="text-[11px] text-rose-500 font-semibold">14 days strict</span>
+            </button>
+            <button onclick="showPolicy('Target')" class="text-left p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-500 bg-slate-50 dark:bg-slate-900 transition">
+              <span class="text-xs font-bold block">Target</span>
+              <span class="text-[11px] text-emerald-600 font-semibold">90 days (+30 RedCard)</span>
+            </button>
+            <button onclick="showPolicy('BestBuy')" class="text-left p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-500 bg-slate-50 dark:bg-slate-900 transition">
+              <span class="text-xs font-bold block">Best Buy</span>
+              <span class="text-[11px] text-slate-400">15 days standard</span>
+            </button>
+          </div>
+          <div id="policy-display-box" class="p-3.5 bg-indigo-50/60 dark:bg-indigo-950/20 rounded-xl border border-indigo-100 dark:border-indigo-900 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+            Select a retailer above or use the generator below to see detailed guidelines and timing tips.
+          </div>
+        </div>
+
+        <!-- Tool 2: AI Return Reason & Support Note Generator -->
+        <div class="border-t border-slate-200 dark:border-slate-700 pt-5">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">2. Smart Return Message & Reason Generator</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">Issue / Reason</label>
+              <select id="ai-reason-type" class="w-full text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                <option value="defective">Defective / Malfunctioning Item</option>
+                <option value="wrong-size">Wrong Size / Fit Issue</option>
+                <option value="not-as-described">Item Not as Pictured / Described</option>
+                <option value="late-delivery">Arrived Too Late / No Longer Needed</option>
+                <option value="accidental">Accidental Duplicate Purchase</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">Select Item to Generate For</label>
+              <select id="ai-item-select" class="w-full text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                <!-- Dynamically populated from active items -->
+              </select>
+            </div>
+          </div>
+
+          <button id="btn-generate-ai-note" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition">
+            <i data-lucide="bot" class="w-4 h-4"></i> Generate Professional Return Note
+          </button>
+
+          <div id="ai-generated-box" class="mt-3 hidden">
+            <label class="block text-xs font-semibold text-slate-500 mb-1">Generated Request Message (Ready to Copy into Support/Chat):</label>
+            <div class="relative">
+              <textarea id="ai-output-text" readonly rows="4" class="w-full p-3 text-xs rounded-xl border border-indigo-200 dark:border-indigo-900 bg-slate-50 dark:bg-slate-900 font-mono"></textarea>
+              <button onclick="copyGeneratedNote()" class="absolute right-2.5 top-2.5 px-2.5 py-1 text-[11px] font-semibold bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded shadow-xs">
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- HIDDEN PRINTABLE RETURN PROOF SLIP                       -->
+  <!-- ======================================================== -->
+  <div id="printable-receipt" class="hidden">
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 2px solid #000; padding: 25px;">
+      <div style="text-align: center; border-bottom: 2px dashed #666; padding-bottom: 15px; margin-bottom: 20px;">
+        <h2 style="margin: 0; font-size: 24px;">RETURN & REFUND PROOF RECEIPT</h2>
+        <p style="margin: 5px 0 0 0; color: #555; font-size: 13px;">ReturnPulse &bull; UTA INSY 3331 Group 8</p>
+      </div>
+
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+        <tr>
+          <td style="padding: 6px 0; font-weight: bold; width: 40%;">Item:</td>
+          <td id="print-item-name" style="padding: 6px 0;">--</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; font-weight: bold;">Retailer / Store:</td>
+          <td id="print-store" style="padding: 6px 0;">--</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; font-weight: bold;">Order / Purchase ID:</td>
+          <td id="print-order-id" style="padding: 6px 0;">--</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; font-weight: bold;">Return / RMA Code:</td>
+          <td id="print-rma" style="padding: 6px 0; font-family: monospace; font-weight: bold;">--</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; font-weight: bold;">Drop-off / Processed Date:</td>
+          <td id="print-drop-date" style="padding: 6px 0;">--</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; font-weight: bold;">Drop-off Location / Carrier:</td>
+          <td id="print-carrier" style="padding: 6px 0;">--</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; font-weight: bold;">Return Tracking #:</td>
+          <td id="print-tracking" style="padding: 6px 0; font-family: monospace;">--</td>
+        </tr>
+        <tr style="border-top: 2px solid #ddd;">
+          <td style="padding: 10px 0; font-weight: bold; font-size: 16px;">Refund Amount Confirmed:</td>
+          <td id="print-refund-amount" style="padding: 10px 0; font-weight: bold; font-size: 18px; color: #047857;">--</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; font-weight: bold;">Refund Method:</td>
+          <td id="print-refund-method" style="padding: 6px 0;">--</td>
+        </tr>
+      </table>
+
+      <div style="background-color: #f3f4f6; padding: 12px; border-radius: 6px; font-size: 12px; color: #444; margin-top: 15px;">
+        <strong>Confirmation Note:</strong>
+        <p id="print-notes" style="margin: 4px 0 0 0;">--</p>
+      </div>
+
+      <div style="margin-top: 25px; text-align: center; font-size: 11px; color: #888;">
+        Generated by ReturnPulse for documentation & dispute prevention. Keep this receipt until refund appears on statement.
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast Container -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
