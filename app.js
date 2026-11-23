@@ -5,6 +5,8 @@
 
 const STORAGE_KEY = 'returnpulse_items_v1';
 const THEME_KEY = 'returnpulse_theme';
+const STORAGE_KEY_API = 'returnpulse_gemini_api_key';
+const STORAGE_KEY_ENGINE = 'returnpulse_engine_mode';
 
 // Default Sample Items
 const SAMPLE_ITEMS = [
@@ -145,6 +147,7 @@ let currentSort = 'deadline-asc';
 let currentSearch = '';
 let currentView = 'grid'; // 'grid' | 'table'
 let currentParsedItem = null;
+let currentShareItem = null;
 
 // Helper: Calculate offset date string (YYYY-MM-DD)
 function getOffsetDateString(daysOffset) {
@@ -185,6 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
   renderApp();
   checkNotificationStatus();
+  loadSettingsUI();
 });
 
 // Load Data from LocalStorage
@@ -227,6 +231,20 @@ function setupEventListeners() {
     localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
     lucide.createIcons();
   });
+
+  // Settings Modal Listeners
+  document.getElementById('btn-open-settings').addEventListener('click', openSettingsModal);
+  document.getElementById('modal-settings-close').addEventListener('click', closeSettingsModal);
+  document.getElementById('modal-settings-cancel').addEventListener('click', closeSettingsModal);
+  document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
+  document.getElementById('btn-clear-api-key').addEventListener('click', clearApiKey);
+  document.getElementById('btn-test-api-key').addEventListener('click', testApiKey);
+  document.getElementById('btn-toggle-key-visibility').addEventListener('click', toggleKeyVisibility);
+
+  // Share Modal Listeners
+  document.getElementById('modal-share-close').addEventListener('click', closeShareModal);
+  document.getElementById('btn-native-share').addEventListener('click', executeNativeShare);
+  document.getElementById('btn-copy-share-text').addEventListener('click', copyShareText);
 
   // Notifications Request
   document.getElementById('btn-request-notifications').addEventListener('click', requestNotificationPermission);
@@ -717,6 +735,11 @@ function createItemCardHTML(item) {
           <button onclick="downloadCalendarInvite('${item.id}')" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700" title="Export to Apple / Google / Outlook Calendar (.ics)">
             <i data-lucide="calendar-plus" class="w-4 h-4 text-blue-500"></i>
           </button>
+
+          <!-- Share Return Details -->
+          <button onclick="shareItem('${item.id}')" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700" title="Share Return Details">
+            <i data-lucide="share-2" class="w-4 h-4 text-indigo-500"></i>
+          </button>
         </div>
 
         <div class="flex items-center gap-1">
@@ -762,6 +785,9 @@ function createItemTableRowHTML(item) {
         <div class="inline-flex items-center gap-1.5">
           <button onclick="openConfirmModal('${item.id}')" class="px-2.5 py-1 text-xs font-semibold bg-emerald-600 text-white rounded hover:bg-emerald-700">
             Confirm
+          </button>
+          <button onclick="shareItem('${item.id}')" class="p-1 text-slate-400 hover:text-indigo-600 rounded" title="Share">
+            <i data-lucide="share-2" class="w-3.5 h-3.5 text-indigo-500"></i>
           </button>
           <button onclick="editItem('${item.id}')" class="p-1 text-slate-400 hover:text-slate-600 rounded">
             <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
@@ -919,7 +945,7 @@ function deleteItem(id) {
 }
 
 // ==========================================================
-// AI SMART INTAKE / ORDER CONFIRMATION PARSER (Zero Manual Input)
+// AI SMART INTAKE & CLOUD API ENGINE (Zero Manual Input)
 // ==========================================================
 function openAiImportModal() {
   document.getElementById('modal-ai-import').classList.remove('hidden');
@@ -989,7 +1015,7 @@ function loadSampleText(storeKey) {
   }
 }
 
-// Intelligent NLP & Regex Parser Function
+// Intelligent Client-Side NLP & Regex Parser Function
 function parseOrderText(raw) {
   if (!raw || !raw.trim()) return null;
   const text = raw.trim();
@@ -1104,15 +1130,81 @@ function parseOrderText(raw) {
   };
 }
 
-// Run AI Parameter Extraction
-function executeAiParse() {
+// Run AI Parameter Extraction (Supports Optional Gemini API with Local Fallback)
+async function executeAiParse() {
   const rawText = document.getElementById('ai-import-raw-text').value;
   if (!rawText.trim()) {
     showToast('Please paste order email text or load a sample first!', 'warning');
     return;
   }
 
-  const parsed = parseOrderText(rawText);
+  const engineMode = localStorage.getItem(STORAGE_KEY_ENGINE) || 'local';
+  const apiKey = localStorage.getItem(STORAGE_KEY_API);
+
+  let parsed = null;
+  let source = 'Client-Side NLP';
+
+  // If user configured Cloud Gemini mode and provided an API key
+  if (engineMode === 'gemini' && apiKey && apiKey.trim()) {
+    try {
+      showToast('Calling Google Gemini 1.5 Flash API...', 'info');
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`;
+      const prompt = `Extract return parameters from this order text into pure JSON matching this exact schema:
+{
+  "store": "Retailer name e.g. Amazon, Apple, Target",
+  "name": "Product title",
+  "price": 0.00,
+  "purchaseDate": "YYYY-MM-DD",
+  "windowDays": 30,
+  "orderId": "order number",
+  "category": "Electronics or Clothing or Home or Books or Other"
+}
+Order text:
+${rawText}`;
+
+      const resp = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json' }
+        })
+      });
+
+      if (resp.ok) {
+        const data = await resp.json();
+        const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (jsonText) {
+          const aiJson = JSON.parse(jsonText);
+          const pDate = new Date(aiJson.purchaseDate + 'T00:00:00');
+          pDate.setDate(pDate.getDate() + (aiJson.windowDays || 30));
+          parsed = {
+            store: aiJson.store || 'Online Retailer',
+            name: aiJson.name || 'Purchased Item',
+            category: aiJson.category || 'Electronics',
+            price: parseFloat(aiJson.price) || 0,
+            purchaseDate: aiJson.purchaseDate,
+            windowDays: parseInt(aiJson.windowDays) || 30,
+            deadlineDate: pDate.toISOString().split('T')[0],
+            orderId: aiJson.orderId || 'N/A',
+            method: 'Standard Return',
+            notes: 'AI Extracted via Google Gemini 1.5 Flash'
+          };
+          source = 'Gemini 1.5 Flash Cloud';
+        }
+      } else {
+        console.warn('Gemini API call failed, falling back to local NLP parser');
+      }
+    } catch (err) {
+      console.warn('Gemini API fetch error, fallback to local', err);
+    }
+  }
+
+  // Fallback to robust Client-Side NLP
+  if (!parsed) {
+    parsed = parseOrderText(rawText);
+  }
+
   if (!parsed) {
     showToast('Could not extract parameters. Try a clearer snippet or sample.', 'warning');
     return;
@@ -1128,9 +1220,10 @@ function executeAiParse() {
   document.getElementById('preview-order-id').textContent = parsed.orderId;
   document.getElementById('preview-policy-text').textContent = `${parsed.store} (${parsed.windowDays} Days)`;
   document.getElementById('preview-deadline').textContent = formatDate(parsed.deadlineDate);
+  document.getElementById('ai-detected-confidence').textContent = `100% (${source})`;
 
   document.getElementById('ai-preview-card').classList.remove('hidden');
-  showToast('AI Parameter extraction successful! Ready to add to tracker.', 'success');
+  showToast(`Parameters extracted via ${source}! Ready to add to tracker.`, 'success');
   lucide.createIcons();
 }
 
@@ -1150,6 +1243,176 @@ function commitAiImportItem() {
   closeAiImportModal();
   renderApp();
   showToast(`Successfully tracked "${newItem.name}" with zero typing!`, 'success');
+}
+
+// ==========================================================
+// SHARE RETURN DETAILS (Native Share Sheet & Copy)
+// ==========================================================
+function shareItem(itemId) {
+  const item = items.find(i => i.id === itemId);
+  if (!item) return;
+  currentShareItem = item;
+
+  const days = getDaysRemaining(item.deadlineDate);
+  let urgencyNote = '';
+  if (item.status === 'CONFIRMED') {
+    urgencyNote = `✅ Refund Confirmed: ${formatCurrency(item.returnDetails?.refundAmount || item.price)}`;
+  } else if (item.status === 'PROCESSING') {
+    urgencyNote = `📦 Dropped off / In Transit (Tracking: ${item.returnDetails?.trackingNo || 'N/A'})`;
+  } else if (days < 0) {
+    urgencyNote = `❌ Deadline passed ${Math.abs(days)} days ago`;
+  } else if (days <= 3) {
+    urgencyNote = `🔥 URGENT: Only ${days} day${days === 1 ? '' : 's'} left to return!`;
+  } else {
+    urgencyNote = `⏳ Return Deadline: ${formatDate(item.deadlineDate)} (${days} days remaining)`;
+  }
+
+  const summary = [
+    `📦 Return Reminder: ${item.name}`,
+    `🏪 Retailer: ${item.store}`,
+    `💰 Price: ${formatCurrency(item.price)}`,
+    `📅 Purchased: ${formatDate(item.purchaseDate)}`,
+    urgencyNote,
+    `📋 Order Ref: ${item.orderId || 'N/A'}`,
+    `🚚 Method: ${item.method || 'Standard Drop-off'}`,
+    `-- Tracked via ReturnPulse (INSY 3331 Group 8)`
+  ].join('\n');
+
+  document.getElementById('share-summary-text').value = summary;
+
+  // Setup email mailto link
+  const subject = encodeURIComponent(`Return Deadline Reminder: ${item.name} (${item.store})`);
+  const body = encodeURIComponent(summary);
+  document.getElementById('btn-email-share').href = `mailto:?subject=${subject}&body=${body}`;
+
+  // Hide or show native share button depending on browser support
+  const nativeBtn = document.getElementById('btn-native-share');
+  if (navigator.share) {
+    nativeBtn.classList.remove('hidden');
+  } else {
+    nativeBtn.classList.add('hidden');
+  }
+
+  document.getElementById('modal-share').classList.remove('hidden');
+  lucide.createIcons();
+}
+
+function closeShareModal() {
+  document.getElementById('modal-share').classList.add('hidden');
+  currentShareItem = null;
+}
+
+function executeNativeShare() {
+  if (!currentShareItem) return;
+  const summary = document.getElementById('share-summary-text').value;
+  if (navigator.share) {
+    navigator.share({
+      title: `Return Deadline: ${currentShareItem.name}`,
+      text: summary,
+      url: window.location.href
+    }).then(() => {
+      showToast('Shared successfully!', 'success');
+      closeShareModal();
+    }).catch((err) => {
+      if (err.name !== 'AbortError') {
+        showToast('Native share closed.', 'info');
+      }
+    });
+  } else {
+    copyShareText();
+  }
+}
+
+function copyShareText() {
+  const text = document.getElementById('share-summary-text');
+  text.select();
+  navigator.clipboard.writeText(text.value).then(() => {
+    showToast('Summary copied to clipboard!', 'success');
+  }).catch(() => {
+    document.execCommand('copy');
+    showToast('Summary copied!', 'success');
+  });
+}
+
+// ==========================================================
+// SETTINGS & OPTIONAL API KEY MODAL
+// ==========================================================
+function openSettingsModal() {
+  loadSettingsUI();
+  document.getElementById('modal-settings').classList.remove('hidden');
+  lucide.createIcons();
+}
+
+function closeSettingsModal() {
+  document.getElementById('modal-settings').classList.add('hidden');
+}
+
+function loadSettingsUI() {
+  const savedKey = localStorage.getItem(STORAGE_KEY_API) || '';
+  const savedEngine = localStorage.getItem(STORAGE_KEY_ENGINE) || 'local';
+  
+  const keyInput = document.getElementById('input-api-key');
+  if (keyInput) keyInput.value = savedKey;
+
+  const radio = document.querySelector(`input[name="ai-engine-mode"][value="${savedEngine}"]`);
+  if (radio) radio.checked = true;
+}
+
+function saveSettings() {
+  const key = document.getElementById('input-api-key').value.trim();
+  const engine = document.querySelector('input[name="ai-engine-mode"]:checked')?.value || 'local';
+
+  localStorage.setItem(STORAGE_KEY_API, key);
+  localStorage.setItem(STORAGE_KEY_ENGINE, engine);
+
+  closeSettingsModal();
+  showToast(`Settings saved! Active Engine: ${engine === 'gemini' ? 'Gemini Cloud API' : 'Local NLP (Free & Offline)'}`, 'success');
+}
+
+function clearApiKey() {
+  localStorage.removeItem(STORAGE_KEY_API);
+  document.getElementById('input-api-key').value = '';
+  document.querySelector('input[name="ai-engine-mode"][value="local"]').checked = true;
+  localStorage.setItem(STORAGE_KEY_ENGINE, 'local');
+  showToast('API Key cleared. Switched to built-in local engine.', 'info');
+}
+
+function toggleKeyVisibility() {
+  const input = document.getElementById('input-api-key');
+  const btn = document.getElementById('btn-toggle-key-visibility');
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = 'Hide';
+  } else {
+    input.type = 'password';
+    btn.textContent = 'Show';
+  }
+}
+
+async function testApiKey() {
+  const key = document.getElementById('input-api-key').value.trim();
+  if (!key) {
+    showToast('Please enter an API key to test first.', 'warning');
+    return;
+  }
+  showToast('Testing Gemini API key connection...', 'info');
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: 'Ping' }] }]
+      })
+    });
+    if (res.ok) {
+      showToast('API Key connection successful! Gemini 1.5 Flash is active.', 'success');
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      showToast(`Key check failed: ${errData.error?.message || 'Invalid API Key'}`, 'warning');
+    }
+  } catch (e) {
+    showToast('Network error while testing API key. Check internet connection.', 'warning');
+  }
 }
 
 // ==========================================================
