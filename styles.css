@@ -49,6 +49,21 @@ body {
   border-width: 1.5px !important;
 }
 
+/* Dropzone Styles */
+.dropzone {
+  border: 2px dashed #cbd5e1;
+  transition: all 0.2s ease-in-out;
+}
+
+.dark .dropzone {
+  border-color: #475569;
+}
+
+.dropzone:hover, .dropzone.dragover {
+  border-color: #6366f1;
+  background-color: rgba(99, 102, 241, 0.05);
+}
+
 /* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;

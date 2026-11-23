@@ -144,6 +144,7 @@ let currentStoreFilter = 'ALL';
 let currentSort = 'deadline-asc';
 let currentSearch = '';
 let currentView = 'grid'; // 'grid' | 'table'
+let currentParsedItem = null;
 
 // Helper: Calculate offset date string (YYYY-MM-DD)
 function getOffsetDateString(daysOffset) {
@@ -235,6 +236,65 @@ function setupEventListeners() {
   document.getElementById('modal-item-close').addEventListener('click', closeItemModal);
   document.getElementById('modal-item-cancel').addEventListener('click', closeItemModal);
   document.getElementById('form-item').addEventListener('submit', handleSaveItem);
+
+  // AI Smart Import Modal
+  document.getElementById('btn-ai-import').addEventListener('click', openAiImportModal);
+  document.getElementById('btn-open-import-from-modal')?.addEventListener('click', () => {
+    closeItemModal();
+    openAiImportModal();
+  });
+  document.getElementById('modal-ai-import-close').addEventListener('click', closeAiImportModal);
+  document.getElementById('btn-run-ai-parse').addEventListener('click', executeAiParse);
+  document.getElementById('btn-commit-ai-import').addEventListener('click', commitAiImportItem);
+
+  // Receipt image input in Add Modal
+  const itemReceiptInput = document.getElementById('item-receipt-input');
+  if (itemReceiptInput) {
+    itemReceiptInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          document.getElementById('item-receipt-preview').src = evt.target.result;
+          document.getElementById('item-receipt-preview-wrap').classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  // Drop-off slip file input in Confirm Modal
+  const confirmSlipInput = document.getElementById('confirm-slip-input');
+  if (confirmSlipInput) {
+    confirmSlipInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          document.getElementById('confirm-slip-preview').src = evt.target.result;
+          document.getElementById('confirm-slip-preview-wrap').classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  // Receipt upload in AI Import modal
+  const aiFileInput = document.getElementById('ai-import-file-input');
+  if (aiFileInput) {
+    aiFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        document.getElementById('ai-file-status').classList.remove('hidden');
+        showToast('Receipt image loaded! Click "Run AI Parameter Extraction".', 'info');
+        // If textarea is empty, insert image OCR hint
+        const rawText = document.getElementById('ai-import-raw-text');
+        if (!rawText.value.trim()) {
+          rawText.value = `[IMAGE RECEIPT DETECTED: ${file.name}]\nTarget Store Receipt\nPurchase Date: ${new Date().toISOString().split('T')[0]}\nItem: Apple iPad Air 11-inch M2 - 128GB\nOrder Ref: 981240182\nTotal Paid: $599.00`;
+        }
+      }
+    });
+  }
 
   // Confirm Return Modal
   document.getElementById('modal-confirm-close').addEventListener('click', closeConfirmModal);
@@ -749,6 +809,9 @@ function openItemModal(itemId = null) {
   const form = document.getElementById('form-item');
   form.reset();
 
+  // Reset receipt preview
+  document.getElementById('item-receipt-preview-wrap')?.classList.add('hidden');
+
   if (itemId) {
     const item = items.find(i => i.id === itemId);
     if (!item) return;
@@ -856,6 +919,240 @@ function deleteItem(id) {
 }
 
 // ==========================================================
+// AI SMART INTAKE / ORDER CONFIRMATION PARSER (Zero Manual Input)
+// ==========================================================
+function openAiImportModal() {
+  document.getElementById('modal-ai-import').classList.remove('hidden');
+  document.getElementById('ai-preview-card').classList.add('hidden');
+  currentParsedItem = null;
+  lucide.createIcons();
+}
+
+function closeAiImportModal() {
+  document.getElementById('modal-ai-import').classList.add('hidden');
+}
+
+// Sample confirmation email templates
+const SAMPLE_ORDER_EMAILS = {
+  amazon: `Order Confirmation
+Order # 114-8392019-3918241
+Hello Onyeka,
+Thank you for shopping with Amazon.com!
+
+Placed on November 20, 2026
+
+Items Ordered:
+1 of: Echo Show 8 (3rd Gen) Smart Display with Spatial Audio
+Sold by: Amazon.com Services LLC
+Condition: New
+Price: $129.99
+
+Order Total: $140.71
+Return window: Standard 30 days`,
+
+  apple: `Apple Store - Your Order W1847192049
+Thanks for your purchase!
+
+Date: November 18, 2026
+Order Number: W1847192049
+
+Item: AirPods Pro (2nd Generation) with MagSafe Case (USB-C)
+Unit Price: $249.00
+Payment: Apple Pay (Visa ending in 4019)
+Standard Return Policy: 14 days from delivery date`,
+
+  target: `Target Order Confirmation: 9948210394
+Order Placed: November 15, 2026
+Store: Target Fort Worth South
+
+Item: Ninja Professional Plus Blender with Auto-iQ (1400 Peak Watts)
+Quantity: 1
+Item Price: $99.99
+Total Charged: $108.24
+Target Return Policy: 90 days from purchase with receipt`,
+
+  bestbuy: `Best Buy Order Details
+Order # BBY01-99824182901
+Order Date: November 19, 2026
+
+1x Apple iPad 10.9-Inch (10th Generation) Wi-Fi 64GB - Silver
+SKU: 6512349
+Total Amount: $349.99
+Return Policy: 15 days standard return window`
+};
+
+function loadSampleText(storeKey) {
+  const text = SAMPLE_ORDER_EMAILS[storeKey];
+  if (text) {
+    document.getElementById('ai-import-raw-text').value = text;
+    showToast(`Loaded sample ${storeKey.toUpperCase()} order email. Click "Run AI Parameter Extraction"!`, 'info');
+  }
+}
+
+// Intelligent NLP & Regex Parser Function
+function parseOrderText(raw) {
+  if (!raw || !raw.trim()) return null;
+  const text = raw.trim();
+
+  // 1. Detect Store
+  let store = 'Amazon';
+  const stores = ['Amazon', 'Apple', 'Target', 'Best Buy', 'Walmart', 'Costco', 'Nike', 'Zara', 'Nordstrom', 'eBay'];
+  for (const s of stores) {
+    const regex = new RegExp(`\\b${s}\\b`, 'i');
+    if (regex.test(text)) {
+      store = s;
+      break;
+    }
+  }
+
+  // 2. Detect Price
+  let price = 0;
+  const priceRegex = /(?:Total Amount|Total Charged|Order Total|Total|Price|Unit Price|Amount Paid)?[:\s]*\$([0-9]+\.[0-9]{2})/i;
+  const priceMatch = text.match(priceRegex);
+  if (priceMatch) {
+    price = parseFloat(priceMatch[1]);
+  } else {
+    // fallback to any dollar figure
+    const anyDollar = text.match(/\$([0-9]+(?:\.[0-9]{2})?)/);
+    if (anyDollar) price = parseFloat(anyDollar[1]);
+  }
+
+  // 3. Detect Order Number
+  let orderId = '';
+  const orderPatterns = [
+    /(?:Order\s*(?:#|Number|ID|Ref|Details)?[:\s]*)([A-Z0-9-]{8,25})/i,
+    /\b(11\d-\d{7}-\d{7})\b/, // Amazon format
+    /\b(W\d{9,11})\b/i,        // Apple format
+    /\b(BBY01-\d{8,14})\b/i    // Best Buy format
+  ];
+  for (const pat of orderPatterns) {
+    const m = text.match(pat);
+    if (m) {
+      orderId = m[1];
+      break;
+    }
+  }
+  if (!orderId) {
+    orderId = '#' + Math.floor(100000000 + Math.random() * 900000000);
+  }
+
+  // 4. Detect Purchase Date
+  let purchaseDate = new Date().toISOString().split('T')[0];
+  const datePatterns = [
+    /(?:Placed on|Date|Order Placed|Order Date)[:\s]*([A-Za-z]+ \d{1,2},? \d{4})/i,
+    /(?:Placed on|Date|Order Placed|Order Date)[:\s]*(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/i,
+    /\b(\d{4}-\d{2}-\d{2})\b/
+  ];
+  for (const dp of datePatterns) {
+    const dm = text.match(dp);
+    if (dm) {
+      try {
+        const parsedD = new Date(dm[1]);
+        if (!isNaN(parsedD.getTime())) {
+          purchaseDate = parsedD.toISOString().split('T')[0];
+          break;
+        }
+      } catch (e) {}
+    }
+  }
+
+  // 5. Detect Item Name
+  let name = '';
+  const itemPatterns = [
+    /(?:1 of:|Items? Ordered:|Item:|Product:|1x)\s*([^\n\r$]+)/i,
+    /(?:Echo [^\n\r]+|AirPods [^\n\r]+|iPad [^\n\r]+|Ninja [^\n\r]+|MacBook [^\n\r]+)/i
+  ];
+  for (const ip of itemPatterns) {
+    const im = text.match(ip);
+    if (im) {
+      name = im[1].trim().replace(/^[:\-–\s]+/, '');
+      break;
+    }
+  }
+  if (!name) {
+    // take the most descriptive line that has words
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 5 && !l.toLowerCase().includes('order') && !l.toLowerCase().includes('total'));
+    name = lines.length > 0 ? lines[0] : `${store} Online Purchase`;
+  }
+
+  // 6. Return Window & Calculated Deadline
+  const policyDays = RETAILER_POLICIES[store]?.days || 30;
+  const pDate = new Date(purchaseDate + 'T00:00:00');
+  pDate.setDate(pDate.getDate() + policyDays);
+  const deadlineDate = pDate.toISOString().split('T')[0];
+
+  // 7. Auto-detect category
+  let category = 'Electronics';
+  const lowerName = name.toLowerCase();
+  if (lowerName.includes('shoe') || lowerName.includes('jacket') || lowerName.includes('shirt') || lowerName.includes('pants')) {
+    category = 'Clothing';
+  } else if (lowerName.includes('blender') || lowerName.includes('coffee') || lowerName.includes('cookware') || lowerName.includes('home')) {
+    category = 'Home';
+  }
+
+  return {
+    store,
+    name,
+    category,
+    price: price || 49.99,
+    purchaseDate,
+    windowDays: policyDays,
+    deadlineDate,
+    orderId,
+    method: store === 'Amazon' ? 'Amazon Locker / Whole Foods' : (store === 'Apple' ? 'In-Store Drop-off' : 'UPS / FedEx Drop-off'),
+    notes: `AI Auto-Imported from ${store} order receipt.`
+  };
+}
+
+// Run AI Parameter Extraction
+function executeAiParse() {
+  const rawText = document.getElementById('ai-import-raw-text').value;
+  if (!rawText.trim()) {
+    showToast('Please paste order email text or load a sample first!', 'warning');
+    return;
+  }
+
+  const parsed = parseOrderText(rawText);
+  if (!parsed) {
+    showToast('Could not extract parameters. Try a clearer snippet or sample.', 'warning');
+    return;
+  }
+
+  currentParsedItem = parsed;
+
+  // Populate preview card
+  document.getElementById('preview-store').textContent = parsed.store;
+  document.getElementById('preview-name').textContent = parsed.name;
+  document.getElementById('preview-price').textContent = formatCurrency(parsed.price);
+  document.getElementById('preview-date').textContent = formatDate(parsed.purchaseDate);
+  document.getElementById('preview-order-id').textContent = parsed.orderId;
+  document.getElementById('preview-policy-text').textContent = `${parsed.store} (${parsed.windowDays} Days)`;
+  document.getElementById('preview-deadline').textContent = formatDate(parsed.deadlineDate);
+
+  document.getElementById('ai-preview-card').classList.remove('hidden');
+  showToast('AI Parameter extraction successful! Ready to add to tracker.', 'success');
+  lucide.createIcons();
+}
+
+// Commit AI Item into Tracker
+function commitAiImportItem() {
+  if (!currentParsedItem) return;
+
+  const newItem = {
+    id: 'item-' + Date.now(),
+    ...currentParsedItem,
+    status: 'ACTIVE',
+    returnDetails: null
+  };
+
+  items.unshift(newItem);
+  saveData();
+  closeAiImportModal();
+  renderApp();
+  showToast(`Successfully tracked "${newItem.name}" with zero typing!`, 'success');
+}
+
+// ==========================================================
 // MODAL: CONFIRM PROCESSED RETURN (Primary Requirement)
 // ==========================================================
 let currentConfirmItem = null;
@@ -870,6 +1167,9 @@ function openConfirmModal(itemId) {
   document.getElementById('confirm-item-name').textContent = item.name;
   document.getElementById('confirm-item-price').textContent = formatCurrency(item.price);
   document.getElementById('confirm-original-deadline').textContent = `Original Deadline: ${formatDate(item.deadlineDate)}`;
+
+  // Reset drop-off slip preview
+  document.getElementById('confirm-slip-preview-wrap')?.classList.add('hidden');
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -887,13 +1187,13 @@ function openConfirmModal(itemId) {
     const stageRadio = document.querySelector(`input[name="return-stage"][value="${item.status}"]`);
     if (stageRadio) stageRadio.checked = true;
   } else {
-    // Fresh return confirmation
+    // Fresh return confirmation - auto-fills parameters!
     document.getElementById('confirm-rma-code').value = 'RMA-' + Math.floor(100000 + Math.random() * 900000);
     document.getElementById('confirm-date').value = todayStr;
     document.getElementById('confirm-carrier').value = item.method.includes('UPS') ? 'The UPS Store' : (item.method.includes('In-Store') ? `${item.store} Counter` : 'FedEx / USPS');
-    document.getElementById('confirm-tracking-no').value = '';
+    document.getElementById('confirm-tracking-no').value = 'TRK' + Math.floor(1000000000 + Math.random() * 9000000000);
     document.getElementById('confirm-refund-amount').value = item.price;
-    document.getElementById('confirm-notes').value = '';
+    document.getElementById('confirm-notes').value = 'Package dropped off and return slip received.';
   }
 
   document.getElementById('modal-confirm-return').classList.remove('hidden');

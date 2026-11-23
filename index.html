@@ -52,14 +52,20 @@
 
       <!-- Action items -->
       <div class="flex items-center gap-2 sm:gap-3">
+        <!-- AI Smart Auto-Import Button -->
+        <button id="btn-ai-import" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:from-violet-700 hover:to-indigo-700 shadow-sm shadow-indigo-500/20 transition">
+          <i data-lucide="sparkles" class="w-4 h-4 text-amber-300"></i>
+          <span>AI Smart Import</span>
+        </button>
+
         <button id="btn-ai-helper" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 bg-indigo-50/70 dark:bg-indigo-950/40 hover:bg-indigo-100 transition shadow-sm">
-          <i data-lucide="sparkles" class="w-4 h-4 text-indigo-500"></i>
-          <span>AI Policy Assistant</span>
+          <i data-lucide="book-open" class="w-4 h-4 text-indigo-500"></i>
+          <span class="hidden md:inline">Policy Advisor</span>
         </button>
 
         <button id="btn-request-notifications" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
           <i data-lucide="bell" class="w-4 h-4 text-amber-500"></i>
-          <span id="notif-status-text">Enable Alerts</span>
+          <span id="notif-status-text" class="hidden sm:inline">Enable Alerts</span>
         </button>
 
         <button id="btn-add-item" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/30 transition">
@@ -249,6 +255,9 @@
         Start tracking return windows for clothes, tech, and online orders so you never forfeit a refund.
       </p>
       <div class="flex items-center justify-center gap-3">
+        <button onclick="document.getElementById('btn-ai-import').click()" class="px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-lg text-sm font-semibold hover:from-violet-700 hover:to-indigo-700 shadow-sm flex items-center gap-1.5">
+          <i data-lucide="sparkles" class="w-4 h-4"></i> AI Auto-Import Email
+        </button>
         <button onclick="document.getElementById('btn-add-item').click()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 shadow-sm">
           + Add First Purchase
         </button>
@@ -274,6 +283,131 @@
   </footer>
 
   <!-- ======================================================== -->
+  <!-- MODAL: AI SMART ORDER PARSER / AUTO-INTAKE (NO TYPING!)  -->
+  <!-- ======================================================== -->
+  <div id="modal-ai-import" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white dark:bg-slate-800 w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden my-8">
+      <!-- Modal Header -->
+      <div class="p-5 bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-600 text-white flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="p-2.5 rounded-xl bg-white/20 backdrop-blur">
+            <i data-lucide="wand-2" class="w-6 h-6 text-amber-300"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-bold text-lg">AI Smart Intake & Receipt Parser</h3>
+              <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-white/20">Zero Manual Typing</span>
+            </div>
+            <p class="text-xs text-indigo-100">Paste raw order email text or drop a receipt image to auto-detect return parameters</p>
+          </div>
+        </div>
+        <button id="modal-ai-import-close" class="text-indigo-100 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-5">
+        <!-- Quick Sample Fill Buttons -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">1. Paste Email or Try Real-World Samples:</span>
+            <span class="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">Click sample to test instant parsing</span>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <button type="button" onclick="loadSampleText('amazon')" class="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-500 bg-slate-50 dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-300 text-left transition flex items-center gap-1.5">
+              <span>🛒 Amazon Order</span>
+            </button>
+            <button type="button" onclick="loadSampleText('apple')" class="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-500 bg-slate-50 dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-300 text-left transition flex items-center gap-1.5">
+              <span>🍏 Apple Store</span>
+            </button>
+            <button type="button" onclick="loadSampleText('target')" class="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-500 bg-slate-50 dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-300 text-left transition flex items-center gap-1.5">
+              <span>🎯 Target Order</span>
+            </button>
+            <button type="button" onclick="loadSampleText('bestbuy')" class="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-500 bg-slate-50 dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-300 text-left transition flex items-center gap-1.5">
+              <span>🏷️ Best Buy</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Raw Text Input & Image Upload Dropzone -->
+        <div class="space-y-3">
+          <div>
+            <textarea id="ai-import-raw-text" rows="5" placeholder="Paste your order confirmation email text, invoice snippet, or receipt details here...
+Example:
+'Thanks for your order from Amazon! Order #114-8841920-1928401. Items Ordered: Echo Show 8 Smart Display - $129.99. Placed on Nov 20, 2026.'" 
+                      class="w-full p-3 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 font-mono focus:ring-2 focus:ring-indigo-500"></textarea>
+          </div>
+
+          <!-- Or Image Upload -->
+          <div class="flex items-center gap-3">
+            <label class="text-xs font-semibold text-slate-500">Or Upload Receipt Screenshot:</label>
+            <input type="file" id="ai-import-file-input" accept="image/*" class="text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 dark:file:bg-indigo-900/40 dark:file:text-indigo-300 hover:file:bg-indigo-100">
+            <span id="ai-file-status" class="text-xs text-emerald-600 hidden font-medium">✓ Image Attached</span>
+          </div>
+
+          <button type="button" id="btn-run-ai-parse" class="w-full py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 transition">
+            <i data-lucide="wand-2" class="w-4 h-4"></i> Run AI Parameter Extraction
+          </button>
+        </div>
+
+        <!-- AI Extraction Result Preview Card -->
+        <div id="ai-preview-card" class="hidden bg-indigo-50/70 dark:bg-indigo-950/30 rounded-xl p-4 border border-indigo-200 dark:border-indigo-800 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="p-1 rounded bg-indigo-600 text-white">
+                <i data-lucide="check" class="w-3.5 h-3.5"></i>
+              </span>
+              <span class="text-xs font-bold text-indigo-900 dark:text-indigo-200 uppercase tracking-wide">Extracted Parameters (Ready to Track)</span>
+            </div>
+            <span id="ai-detected-confidence" class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">100% Parsed</span>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+            <div class="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+              <span class="text-[10px] font-bold text-slate-400 uppercase block">Store / Retailer</span>
+              <span id="preview-store" class="font-bold text-slate-900 dark:text-white">--</span>
+            </div>
+            <div class="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 sm:col-span-2">
+              <span class="text-[10px] font-bold text-slate-400 uppercase block">Item Description</span>
+              <span id="preview-name" class="font-bold text-slate-900 dark:text-white truncate block">--</span>
+            </div>
+            <div class="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+              <span class="text-[10px] font-bold text-slate-400 uppercase block">Price Paid</span>
+              <span id="preview-price" class="font-bold text-emerald-600">--</span>
+            </div>
+            <div class="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+              <span class="text-[10px] font-bold text-slate-400 uppercase block">Purchase Date</span>
+              <span id="preview-date" class="font-medium text-slate-800 dark:text-slate-200">--</span>
+            </div>
+            <div class="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+              <span class="text-[10px] font-bold text-slate-400 uppercase block">Order / Ref #</span>
+              <span id="preview-order-id" class="font-mono text-slate-800 dark:text-slate-200 truncate block">--</span>
+            </div>
+          </div>
+
+          <!-- Policy & Deadline Prediction -->
+          <div class="p-2.5 rounded-lg bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border border-indigo-200 dark:border-indigo-900 flex items-center justify-between text-xs">
+            <div>
+              <span class="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 uppercase block">Policy Window Applied</span>
+              <span id="preview-policy-text" class="font-bold text-indigo-900 dark:text-indigo-200">30 Days Standard</span>
+            </div>
+            <div class="text-right">
+              <span class="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 uppercase block">Calculated Deadline</span>
+              <span id="preview-deadline" class="font-extrabold text-blue-600 dark:text-blue-400">--</span>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-1">
+            <button type="button" id="btn-commit-ai-import" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 transition">
+              <i data-lucide="plus-circle" class="w-4 h-4"></i> Add Extracted Item to Tracker
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
   <!-- MODAL: Add / Edit Purchase & Return Window               -->
   <!-- ======================================================== -->
   <div id="modal-item" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
@@ -292,6 +426,17 @@
 
       <form id="form-item" class="p-5 space-y-4">
         <input type="hidden" id="item-id">
+
+        <!-- AI Fast Banner -->
+        <div class="bg-indigo-50 dark:bg-indigo-950/40 p-3 rounded-xl border border-indigo-200 dark:border-indigo-800 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i data-lucide="sparkles" class="w-4 h-4 text-indigo-600 dark:text-indigo-400"></i>
+            <span class="text-xs text-indigo-900 dark:text-indigo-200 font-medium">Don't want to type? Paste confirmation email</span>
+          </div>
+          <button type="button" id="btn-open-import-from-modal" class="text-xs font-bold text-indigo-700 dark:text-indigo-300 underline hover:text-indigo-900">
+            Auto-fill with AI &rarr;
+          </button>
+        </div>
 
         <!-- Store selection with quick buttons -->
         <div>
@@ -362,7 +507,7 @@
             </div>
           </div>
           <p class="text-[11px] text-blue-600 dark:text-blue-400">
-            <i data-lucide="info" class="w-3 h-3 inline mr-1"></i>Changing either field will automatically recalculate the deadline.
+            <i data-lucide="info" class="w-3 h-3 inline mr-1"></i>Changing either field automatically recalculates the deadline.
           </p>
         </div>
 
@@ -382,6 +527,18 @@
               <option value="Amazon Locker / Whole Foods">Amazon Locker / Whole Foods</option>
               <option value="Courier Pickup">Home Pickup</option>
             </select>
+          </div>
+        </div>
+
+        <!-- Receipt Attachment Dropzone -->
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Attach Receipt / Invoice Photo</label>
+          <div class="flex items-center gap-3">
+            <input type="file" id="item-receipt-input" accept="image/*" class="text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-900/40 dark:file:text-blue-300 hover:file:bg-blue-100">
+            <div id="item-receipt-preview-wrap" class="hidden flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+              <img id="item-receipt-preview" class="w-7 h-7 object-cover rounded border border-slate-300">
+              <span class="text-[11px]">Attached</span>
+            </div>
           </div>
         </div>
 
@@ -509,11 +666,24 @@
           </div>
         </div>
 
-        <!-- Drop-off receipt confirmation note -->
-        <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Confirmation Notes / Receipt Slip details</label>
-          <input type="text" id="confirm-notes" placeholder="e.g. Dropped off at UPS Store counter, received paper slip with signature" 
-                 class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-emerald-500">
+        <!-- Drop-off slip photo & notes -->
+        <div class="space-y-2">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Drop-off Slip Photo (Proof)</label>
+            <div class="flex items-center gap-3">
+              <input type="file" id="confirm-slip-input" accept="image/*" class="text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 dark:file:bg-emerald-900/40 dark:file:text-emerald-300 hover:file:bg-emerald-100">
+              <div id="confirm-slip-preview-wrap" class="hidden flex items-center gap-1.5 text-xs text-emerald-700">
+                <img id="confirm-slip-preview" class="w-7 h-7 object-cover rounded border border-emerald-300">
+                <span class="text-[11px] font-medium">Slip Attached</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Confirmation Notes / Counter details</label>
+            <input type="text" id="confirm-notes" placeholder="e.g. Handed to UPS counter associate, received paper slip with signature" 
+                   class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-emerald-500">
+          </div>
         </div>
 
         <div class="pt-3 flex items-center justify-between border-t border-slate-100 dark:border-slate-700">
