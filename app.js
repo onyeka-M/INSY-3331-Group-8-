@@ -285,6 +285,10 @@ function setupEventListeners() {
   document.getElementById('modal-ai-import-close').addEventListener('click', closeAiImportModal);
   document.getElementById('btn-run-ai-parse').addEventListener('click', executeAiParse);
   document.getElementById('btn-commit-ai-import').addEventListener('click', commitAiImportItem);
+  document.getElementById('ai-review-confirm').addEventListener('change', updateAiCommitAvailability);
+  ['preview-store', 'preview-name', 'preview-price', 'preview-date', 'preview-order-id'].forEach(id => {
+    document.getElementById(id).addEventListener('input', handleAiReviewEdit);
+  });
 
   // Receipt image input in Add Modal
   const itemReceiptInput = document.getElementById('item-receipt-input');
@@ -328,6 +332,8 @@ function setupEventListeners() {
 
       currentReceiptImage = null;
       document.getElementById('ai-preview-card').classList.add('hidden');
+      document.getElementById('ai-review-confirm').checked = false;
+      document.getElementById('btn-commit-ai-import').disabled = true;
       currentParsedItem = null;
 
       if (!file) {
@@ -1003,6 +1009,8 @@ function deleteItem(id) {
 function openAiImportModal() {
   document.getElementById('modal-ai-import').classList.remove('hidden');
   document.getElementById('ai-preview-card').classList.add('hidden');
+  document.getElementById('ai-review-confirm').checked = false;
+  document.getElementById('btn-commit-ai-import').disabled = true;
   currentParsedItem = null;
   lucide.createIcons();
 }
@@ -1068,6 +1076,10 @@ function loadSampleText(storeKey) {
     const fileStatus = document.getElementById('ai-file-status');
     if (fileInput) fileInput.value = '';
     if (fileStatus) fileStatus.classList.add('hidden');
+    document.getElementById('ai-preview-card').classList.add('hidden');
+    document.getElementById('ai-review-confirm').checked = false;
+    document.getElementById('btn-commit-ai-import').disabled = true;
+    currentParsedItem = null;
     document.getElementById('ai-import-raw-text').value = text;
     showToast(`Loaded sample ${storeKey.toUpperCase()} order email. Click "Run AI Parameter Extraction"!`, 'info');
   }
@@ -1079,35 +1091,41 @@ function parseOrderText(raw) {
   const text = raw.trim();
 
   // 1. Detect Store
-  let store = 'Amazon';
+  let store = 'Unknown Retailer';
   const stores = ['Amazon', 'Apple', 'Target', 'Best Buy', 'Walmart', 'Costco', 'Nike', 'Zara', 'Nordstrom', 'eBay'];
+  let earliestStoreIndex = Number.POSITIVE_INFINITY;
   for (const s of stores) {
     const regex = new RegExp(`\\b${s}\\b`, 'i');
-    if (regex.test(text)) {
+    const match = regex.exec(text);
+    if (match && match.index < earliestStoreIndex) {
       store = s;
-      break;
+      earliestStoreIndex = match.index;
     }
   }
 
   // 2. Detect Price
   let price = 0;
-  const priceRegex = /(?:Total Amount|Total Charged|Order Total|Total|Price|Unit Price|Amount Paid)?[:\s]*\$([0-9]+\.[0-9]{2})/i;
-  const priceMatch = text.match(priceRegex);
-  if (priceMatch) {
-    price = parseFloat(priceMatch[1]);
-  } else {
-    // fallback to any dollar figure
-    const anyDollar = text.match(/\$([0-9]+(?:\.[0-9]{2})?)/);
-    if (anyDollar) price = parseFloat(anyDollar[1]);
+  const pricePatterns = [
+    /(?:^|[\r\n])\s*(?:Grand Total|Order Total|Total Charged|Total Amount|Amount Paid|Total Paid|Total)\s*:\s*\$([0-9]+(?:\.[0-9]{2})?)/im,
+    /(?:^|[\r\n])\s*(?:Unit Price|Item Price|Price)\s*:\s*\$([0-9]+(?:\.[0-9]{2})?)/im
+  ];
+  for (const pattern of pricePatterns) {
+    const priceMatch = text.match(pattern);
+    if (priceMatch) {
+      price = Number.parseFloat(priceMatch[1]);
+      break;
+    }
   }
 
   // 3. Detect Order Number
   let orderId = '';
   const orderPatterns = [
-    /(?:Order\s*(?:#|Number|ID|Ref|Details)?[:\s]*)([A-Z0-9-]{8,25})/i,
+    /(?:Transaction\s*ID[:\s]*)([A-Z0-9-]{8,25})/i,
     /\b(11\d-\d{7}-\d{7})\b/, // Amazon format
     /\b(W\d{9,11})\b/i,        // Apple format
-    /\b(BBY01-\d{8,14})\b/i    // Best Buy format
+    /\b(BBY01-\d{8,14})\b/i,   // Best Buy format
+    /Order\s+Confirmation\s*[:#-]\s*([A-Z0-9-]{6,25})/i,
+    /Order\s*(?:#|Number|ID|Ref)\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{5,24})\b/i
   ];
   for (const pat of orderPatterns) {
     const m = text.match(pat);
@@ -1116,15 +1134,12 @@ function parseOrderText(raw) {
       break;
     }
   }
-  if (!orderId) {
-    orderId = '#' + Math.floor(100000000 + Math.random() * 900000000);
-  }
-
   // 4. Detect Purchase Date
-  let purchaseDate = new Date().toISOString().split('T')[0];
+  let purchaseDate = '';
   const datePatterns = [
     /(?:Placed on|Date|Order Placed|Order Date)[:\s]*([A-Za-z]+ \d{1,2},? \d{4})/i,
     /(?:Placed on|Date|Order Placed|Order Date)[:\s]*(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/i,
+    /\b(\d{1,2}\/\d{1,2}\/\d{4})\b/,
     /\b(\d{4}-\d{2}-\d{2})\b/
   ];
   for (const dp of datePatterns) {
@@ -1143,27 +1158,30 @@ function parseOrderText(raw) {
   // 5. Detect Item Name
   let name = '';
   const itemPatterns = [
-    /(?:1 of:|Items? Ordered:|Item:|Product:|1x)\s*([^\n\r$]+)/i,
+    /(?:^|\n)\s*(?:\d+\s+of:|\d+x)\s*([^\n\r$]+)/im,
+    /(?:^|\n)\s*(?:Item|Product)\s*:\s*([^\n\r$]+)/im,
+    /Items?\s+Ordered\s*:\s*(?:\r?\n)?\s*(?:\d+\s+of:\s*)?([^\n\r$]+)/i,
     /(?:Echo [^\n\r]+|AirPods [^\n\r]+|iPad [^\n\r]+|Ninja [^\n\r]+|MacBook [^\n\r]+)/i
   ];
   for (const ip of itemPatterns) {
     const im = text.match(ip);
     if (im) {
-      name = im[1].trim().replace(/^[:\-–\s]+/, '');
+      name = (im[1] || im[0])
+        .trim()
+        .replace(/^\d+\s+(?:of:|x)\s*/i, '')
+        .replace(/\s+\$[0-9]+(?:\.[0-9]{2})?\s*$/, '')
+        .replace(/^[:\-–\s]+/, '');
       break;
     }
   }
-  if (!name) {
-    // take the most descriptive line that has words
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 5 && !l.toLowerCase().includes('order') && !l.toLowerCase().includes('total'));
-    name = lines.length > 0 ? lines[0] : `${store} Online Purchase`;
-  }
-
   // 6. Return Window & Calculated Deadline
   const policyDays = RETAILER_POLICIES[store]?.days || 30;
-  const pDate = new Date(purchaseDate + 'T00:00:00');
-  pDate.setDate(pDate.getDate() + policyDays);
-  const deadlineDate = pDate.toISOString().split('T')[0];
+  let deadlineDate = '';
+  if (purchaseDate) {
+    const pDate = new Date(purchaseDate + 'T00:00:00');
+    pDate.setDate(pDate.getDate() + policyDays);
+    deadlineDate = pDate.toISOString().split('T')[0];
+  }
 
   // 7. Auto-detect category
   let category = 'Electronics';
@@ -1178,13 +1196,13 @@ function parseOrderText(raw) {
     store,
     name,
     category,
-    price: price || 49.99,
+    price,
     purchaseDate,
     windowDays: policyDays,
     deadlineDate,
     orderId,
-    method: store === 'Amazon' ? 'Amazon Locker / Whole Foods' : (store === 'Apple' ? 'In-Store Drop-off' : 'UPS / FedEx Drop-off'),
-    notes: `AI Auto-Imported from ${store} order receipt.`
+    method: store === 'Amazon' ? 'Amazon Locker / Whole Foods' : (store === 'Apple' ? 'In-Store Drop-off' : 'Standard Return'),
+    notes: `Extracted from supplied ${store} order text. Review before tracking.`
   };
 }
 
@@ -1214,7 +1232,8 @@ function buildParsedItemFromAi(aiJson) {
 
   const parsedPrice = Number.parseFloat(aiJson.price);
   const allowedCategories = ['Electronics', 'Clothing', 'Home', 'Books', 'Other'];
-  const category = allowedCategories.includes(aiJson.category) ? aiJson.category : 'Other';
+  const categoryInput = String(aiJson.category || '').trim().toLowerCase();
+  const category = allowedCategories.find(value => value.toLowerCase() === categoryInput) || 'Other';
 
   return {
     store,
@@ -1333,27 +1352,84 @@ ${rawText || '(No text supplied. Read the attached receipt image.)'}`;
 
   currentParsedItem = parsed;
 
-  document.getElementById('preview-store').textContent = parsed.store || '--';
-  document.getElementById('preview-name').textContent = parsed.name || 'Not detected';
-  document.getElementById('preview-price').textContent = parsed.price ? formatCurrency(parsed.price) : 'Not detected';
-  document.getElementById('preview-date').textContent = parsed.purchaseDate ? formatDate(parsed.purchaseDate) : 'Not detected';
-  document.getElementById('preview-order-id').textContent = parsed.orderId || 'Not detected';
+  document.getElementById('preview-store').value = parsed.store === 'Unknown Retailer' ? '' : parsed.store;
+  document.getElementById('preview-name').value = parsed.name || '';
+  document.getElementById('preview-price').value = parsed.price || '';
+  document.getElementById('preview-date').value = parsed.purchaseDate || '';
+  document.getElementById('preview-order-id').value = parsed.orderId || '';
   document.getElementById('preview-policy-text').textContent = `${parsed.store} (${parsed.windowDays} Days)`;
   document.getElementById('preview-deadline').textContent = parsed.deadlineDate ? formatDate(parsed.deadlineDate) : 'Needs purchase date';
-  document.getElementById('ai-detected-confidence').textContent = `${source} \u2022 review result`;
+  document.getElementById('ai-detected-confidence').textContent = `${source} \u2022 review required`;
+  document.getElementById('ai-review-confirm').checked = false;
+  document.getElementById('btn-commit-ai-import').disabled = true;
 
   document.getElementById('ai-preview-card').classList.remove('hidden');
   showToast(`Receipt details extracted via ${source}. Review before adding.`, 'success');
   lucide.createIcons();
 }
 
-// Commit AI Item into Tracker
+function updateAiReviewPolicyPreview() {
+  const store = normalizeRetailerName(document.getElementById('preview-store').value);
+  const purchaseDate = document.getElementById('preview-date').value;
+  const windowDays = RETAILER_POLICIES[store]?.days || 30;
+  let deadlineDate = '';
+
+  if (purchaseDate) {
+    const deadline = new Date(`${purchaseDate}T00:00:00`);
+    if (!Number.isNaN(deadline.getTime())) {
+      deadline.setDate(deadline.getDate() + windowDays);
+      deadlineDate = deadline.toISOString().split('T')[0];
+    }
+  }
+
+  document.getElementById('preview-policy-text').textContent = `${store} (${windowDays} Days)`;
+  document.getElementById('preview-deadline').textContent = deadlineDate ? formatDate(deadlineDate) : 'Needs purchase date';
+  return { store, windowDays, deadlineDate };
+}
+
+function updateAiCommitAvailability() {
+  document.getElementById('btn-commit-ai-import').disabled = !document.getElementById('ai-review-confirm').checked;
+}
+
+function handleAiReviewEdit() {
+  document.getElementById('ai-review-confirm').checked = false;
+  updateAiCommitAvailability();
+  updateAiReviewPolicyPreview();
+}
+
+// Commit only the values the user reviewed, not unchecked model output.
 function commitAiImportItem() {
   if (!currentParsedItem) return;
+
+  const reviewed = document.getElementById('ai-review-confirm').checked;
+  if (!reviewed) {
+    showToast('Review the extracted details and check the confirmation box first.', 'warning');
+    return;
+  }
+
+  const name = document.getElementById('preview-name').value.trim();
+  const price = Number.parseFloat(document.getElementById('preview-price').value);
+  const purchaseDate = document.getElementById('preview-date').value;
+  const orderId = document.getElementById('preview-order-id').value.trim();
+  const { store, windowDays, deadlineDate } = updateAiReviewPolicyPreview();
+
+  if (!store || store === 'Unknown Retailer' || !name || !Number.isFinite(price) || price <= 0 || !purchaseDate || !deadlineDate) {
+    showToast('Store, item, total paid, and purchase date are required before tracking.', 'warning');
+    return;
+  }
 
   const newItem = {
     id: 'item-' + Date.now(),
     ...currentParsedItem,
+    store,
+    name,
+    price,
+    purchaseDate,
+    windowDays,
+    deadlineDate,
+    orderId: orderId || 'Not provided',
+    method: store === 'Amazon' ? 'Amazon Locker / Whole Foods' : (store === 'Apple' ? 'In-Store Drop-off' : 'Standard Return'),
+    notes: 'AI-extracted purchase details reviewed by the user before tracking.',
     status: 'ACTIVE',
     returnDetails: null
   };
@@ -1362,7 +1438,11 @@ function commitAiImportItem() {
   saveData();
   closeAiImportModal();
   renderApp();
-  showToast(`Successfully tracked "${newItem.name}" with zero typing!`, 'success');
+  currentReceiptImage = null;
+  document.getElementById('ai-import-file-input').value = '';
+  document.getElementById('ai-file-status').classList.add('hidden');
+  document.getElementById('ai-import-raw-text').value = '';
+  showToast(`Reviewed purchase added: "${newItem.name}".`, 'success');
 }
 
 // ==========================================================

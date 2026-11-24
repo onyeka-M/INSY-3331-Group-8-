@@ -491,31 +491,31 @@ Example:
               <span class="p-1 rounded bg-indigo-600 text-white">
                 <i data-lucide="check" class="w-3.5 h-3.5"></i>
               </span>
-              <span class="text-xs font-bold text-indigo-900 dark:text-indigo-200 uppercase tracking-wide">Extracted Parameters (Ready to Track)</span>
+              <span class="text-xs font-bold text-indigo-900 dark:text-indigo-200 uppercase tracking-wide">Extracted Parameters (Review Required)</span>
             </div>
-            <span id="ai-detected-confidence" class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">100% Parsed</span>
+            <span id="ai-detected-confidence" class="text-[11px] font-semibold text-amber-600 dark:text-amber-400">AI result • review required</span>
           </div>
 
           <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
             <div class="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-              <span class="text-[10px] font-bold text-slate-400 uppercase block">Store / Retailer</span>
-              <span id="preview-store" class="font-bold text-slate-900 dark:text-white">--</span>
+              <label for="preview-store" class="text-[10px] font-bold text-slate-400 uppercase block">Store / Retailer</label>
+              <input id="preview-store" type="text" class="w-full mt-1 px-2 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 font-bold text-slate-900 dark:text-white" placeholder="Retailer name">
             </div>
             <div class="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 sm:col-span-2">
-              <span class="text-[10px] font-bold text-slate-400 uppercase block">Item Description</span>
-              <span id="preview-name" class="font-bold text-slate-900 dark:text-white truncate block">--</span>
+              <label for="preview-name" class="text-[10px] font-bold text-slate-400 uppercase block">Item Description</label>
+              <input id="preview-name" type="text" class="w-full mt-1 px-2 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 font-bold text-slate-900 dark:text-white" placeholder="Item and quantity">
             </div>
             <div class="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-              <span class="text-[10px] font-bold text-slate-400 uppercase block">Price Paid</span>
-              <span id="preview-price" class="font-bold text-emerald-600">--</span>
+              <label for="preview-price" class="text-[10px] font-bold text-slate-400 uppercase block">Total Paid</label>
+              <input id="preview-price" type="number" min="0.01" step="0.01" class="w-full mt-1 px-2 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 font-bold text-emerald-600" placeholder="0.00">
             </div>
             <div class="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-              <span class="text-[10px] font-bold text-slate-400 uppercase block">Purchase Date</span>
-              <span id="preview-date" class="font-medium text-slate-800 dark:text-slate-200">--</span>
+              <label for="preview-date" class="text-[10px] font-bold text-slate-400 uppercase block">Purchase Date</label>
+              <input id="preview-date" type="date" class="w-full mt-1 px-2 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 font-medium text-slate-800 dark:text-slate-200">
             </div>
             <div class="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-              <span class="text-[10px] font-bold text-slate-400 uppercase block">Order / Ref #</span>
-              <span id="preview-order-id" class="font-mono text-slate-800 dark:text-slate-200 truncate block">--</span>
+              <label for="preview-order-id" class="text-[10px] font-bold text-slate-400 uppercase block">Order / Ref #</label>
+              <input id="preview-order-id" type="text" class="w-full mt-1 px-2 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 font-mono text-slate-800 dark:text-slate-200" placeholder="Optional">
             </div>
           </div>
 
@@ -531,9 +531,17 @@ Example:
             </div>
           </div>
 
-          <div class="flex items-center justify-end gap-2 pt-1">
-            <button type="button" id="btn-commit-ai-import" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 transition">
-              <i data-lucide="plus-circle" class="w-4 h-4"></i> Add Extracted Item to Tracker
+          <div class="p-3 rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
+            AI can misread receipts. Correct any missing or inaccurate fields above before continuing.
+          </div>
+
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
+            <label class="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+              <input id="ai-review-confirm" type="checkbox" class="mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+              <span>I checked these details against my receipt.</span>
+            </label>
+            <button type="button" id="btn-commit-ai-import" disabled class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition">
+              <i data-lucide="check-circle" class="w-4 h-4"></i> Confirm and Add to Tracker
             </button>
           </div>
         </div>
