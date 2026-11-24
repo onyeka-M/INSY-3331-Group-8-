@@ -1023,7 +1023,7 @@ function closeAiImportModal() {
 const SAMPLE_ORDER_EMAILS = {
   amazon: `Order Confirmation
 Order # 114-8392019-3918241
-Hello Onyeka,
+Hello Customer,
 Thank you for shopping with Amazon.com!
 
 Placed on November 20, 2026
@@ -1887,9 +1887,11 @@ function generateAiReturnNote() {
   };
 
   const output = document.getElementById('ai-output-text');
-  output.value = `Subject: Return Authorization Request - Order ${item.orderId || 'N/A'} - ${item.name}\n\nDear ${item.store} Customer Support,\n\n${reasonTexts[reasonType]}\n\nPurchase Details:\n- Item: ${item.name}\n- Purchase Date: ${formatDate(item.purchaseDate)}\n- Deadline: ${formatDate(item.deadlineDate)}\n- Total Paid: ${formatCurrency(item.price)}\n\nThank you for your prompt assistance,\nOnyekachi (UTA Group 8)`;
+  output.value = `Subject: Return Authorization Request - Order ${item.orderId || 'N/A'} - ${item.name}\n\nDear ${item.store} Customer Support,\n\n${reasonTexts[reasonType]}\n\nPurchase Details:\n- Item: ${item.name}\n- Purchase Date: ${formatDate(item.purchaseDate)}\n- Deadline: ${formatDate(item.deadlineDate)}\n- Total Paid: ${formatCurrency(item.price)}\n\nThank you for your prompt assistance,\n[Your Name]`;
 
   document.getElementById('ai-generated-box').classList.remove('hidden');
+  output.style.height = 'auto';
+  output.style.height = `${Math.min(Math.max(output.scrollHeight, 260), 520)}px`;
 }
 
 function copyGeneratedNote() {
