@@ -307,7 +307,7 @@
       <div class="p-5 space-y-4 text-xs">
         <!-- Notice about local storage -->
         <div class="p-3 bg-blue-50/70 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-900 text-blue-900 dark:text-blue-300 leading-relaxed">
-          <strong>Privacy Guarantee:</strong> An API key is <strong>strictly optional</strong>. If you provide one, it is saved only in your local browser (<code class="font-mono">localStorage</code>) and is never committed to GitHub or sent to any third party.
+          <strong>API Key Notice:</strong> An API key is <strong>optional for pasted text</strong> but required to read receipt images. It is saved in this browser only and sent directly to Google when Gemini Cloud mode is used. It is never committed to GitHub by this app.
         </div>
 
         <!-- Engine Choice -->
@@ -324,8 +324,8 @@
             <label class="flex items-start gap-2.5 p-2.5 rounded-lg border border-indigo-200 dark:border-indigo-800 cursor-pointer hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20">
               <input type="radio" name="ai-engine-mode" value="gemini" class="mt-0.5 text-indigo-600">
               <div>
-                <span class="font-bold text-indigo-600 dark:text-indigo-400 block">Google Gemini 1.5 Flash (Cloud API)</span>
-                <span class="text-slate-400 text-[11px]">Uses multimodal cloud LLM to parse complex, messy, or unstructured invoices.</span>
+                <span class="font-bold text-indigo-600 dark:text-indigo-400 block">Google Gemini Flash (Cloud API)</span>
+                <span class="text-slate-400 text-[11px]">Reads uploaded receipt images and extracts visible purchase details.</span>
               </div>
             </label>
           </div>
@@ -476,7 +476,7 @@ Example:
           <div class="flex items-center gap-3">
             <label class="text-xs font-semibold text-slate-500">Or Upload Receipt Screenshot:</label>
             <input type="file" id="ai-import-file-input" accept="image/*" class="text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 dark:file:bg-indigo-900/40 dark:file:text-indigo-300 hover:file:bg-indigo-100">
-            <span id="ai-file-status" class="text-xs text-emerald-600 hidden font-medium">✓ Image Attached</span>
+            <span id="ai-file-status" class="text-xs text-emerald-600 hidden font-medium">✓ Image ready</span>
           </div>
 
           <button type="button" id="btn-run-ai-parse" class="w-full py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 transition">

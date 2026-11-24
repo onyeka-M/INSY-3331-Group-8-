@@ -7,6 +7,8 @@ const STORAGE_KEY = 'returnpulse_items_v1';
 const THEME_KEY = 'returnpulse_theme';
 const STORAGE_KEY_API = 'returnpulse_gemini_api_key';
 const STORAGE_KEY_ENGINE = 'returnpulse_engine_mode';
+const GEMINI_MODEL = 'gemini-3.5-flash';
+const MAX_RECEIPT_IMAGE_BYTES = 10 * 1024 * 1024;
 
 // Default Sample Items
 const SAMPLE_ITEMS = [
@@ -148,6 +150,7 @@ let currentSearch = '';
 let currentView = 'grid'; // 'grid' | 'table'
 let currentParsedItem = null;
 let currentShareItem = null;
+let currentReceiptImage = null;
 
 // Helper: Calculate offset date string (YYYY-MM-DD)
 function getOffsetDateString(daysOffset) {
@@ -179,6 +182,24 @@ function formatDate(dateStr) {
 // Helper: Format Currency
 function formatCurrency(amount) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0);
+}
+
+// Convert an uploaded receipt into the base64 format expected by Gemini vision.
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      const commaIndex = result.indexOf(',');
+      if (commaIndex === -1) {
+        reject(new Error('Invalid image data'));
+        return;
+      }
+      resolve(result.slice(commaIndex + 1));
+    };
+    reader.onerror = () => reject(reader.error || new Error('Could not read image'));
+    reader.readAsDataURL(file);
+  });
 }
 
 // Initialize Application
@@ -300,16 +321,48 @@ function setupEventListeners() {
   // Receipt upload in AI Import modal
   const aiFileInput = document.getElementById('ai-import-file-input');
   if (aiFileInput) {
-    aiFileInput.addEventListener('change', (e) => {
+    aiFileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
-      if (file) {
-        document.getElementById('ai-file-status').classList.remove('hidden');
-        showToast('Receipt image loaded! Click "Run AI Parameter Extraction".', 'info');
-        // If textarea is empty, insert image OCR hint
-        const rawText = document.getElementById('ai-import-raw-text');
-        if (!rawText.value.trim()) {
-          rawText.value = `[IMAGE RECEIPT DETECTED: ${file.name}]\nTarget Store Receipt\nPurchase Date: ${new Date().toISOString().split('T')[0]}\nItem: Apple iPad Air 11-inch M2 - 128GB\nOrder Ref: 981240182\nTotal Paid: $599.00`;
-        }
+      const status = document.getElementById('ai-file-status');
+      const rawText = document.getElementById('ai-import-raw-text');
+
+      currentReceiptImage = null;
+      document.getElementById('ai-preview-card').classList.add('hidden');
+      currentParsedItem = null;
+
+      if (!file) {
+        status.classList.add('hidden');
+        return;
+      }
+
+      if (!file.type.startsWith('image/')) {
+        aiFileInput.value = '';
+        status.classList.add('hidden');
+        showToast('Please choose a PNG, JPG, WEBP, or other image file.', 'warning');
+        return;
+      }
+
+      if (file.size > MAX_RECEIPT_IMAGE_BYTES) {
+        aiFileInput.value = '';
+        status.classList.add('hidden');
+        showToast('Receipt image must be smaller than 10 MB.', 'warning');
+        return;
+      }
+
+      try {
+        currentReceiptImage = {
+          name: file.name,
+          mimeType: file.type || 'image/jpeg',
+          data: await readFileAsBase64(file)
+        };
+        rawText.value = '';
+        status.textContent = `\u2713 ${file.name} ready`;
+        status.classList.remove('hidden');
+        showToast('Receipt image ready. Run extraction to read the actual image.', 'info');
+      } catch (error) {
+        aiFileInput.value = '';
+        status.classList.add('hidden');
+        showToast('The receipt image could not be loaded. Please try another file.', 'warning');
       }
     });
   }
@@ -1010,6 +1063,11 @@ Return Policy: 15 days standard return window`
 function loadSampleText(storeKey) {
   const text = SAMPLE_ORDER_EMAILS[storeKey];
   if (text) {
+    currentReceiptImage = null;
+    const fileInput = document.getElementById('ai-import-file-input');
+    const fileStatus = document.getElementById('ai-file-status');
+    if (fileInput) fileInput.value = '';
+    if (fileStatus) fileStatus.classList.add('hidden');
     document.getElementById('ai-import-raw-text').value = text;
     showToast(`Loaded sample ${storeKey.toUpperCase()} order email. Click "Run AI Parameter Extraction"!`, 'info');
   }
@@ -1130,100 +1188,162 @@ function parseOrderText(raw) {
   };
 }
 
-// Run AI Parameter Extraction (Supports Optional Gemini API with Local Fallback)
+function normalizeRetailerName(value) {
+  const candidate = String(value || '').trim();
+  if (!candidate) return 'Unknown Retailer';
+
+  const knownStore = Object.keys(RETAILER_POLICIES).find(store =>
+    candidate.toLowerCase().includes(store.toLowerCase())
+  );
+  return knownStore || candidate;
+}
+
+function buildParsedItemFromAi(aiJson) {
+  const store = normalizeRetailerName(aiJson.store);
+  const purchaseDate = /^\d{4}-\d{2}-\d{2}$/.test(String(aiJson.purchaseDate || ''))
+    ? aiJson.purchaseDate
+    : '';
+  const windowDays = RETAILER_POLICIES[store]?.days || 30;
+  let deadlineDate = '';
+
+  if (purchaseDate) {
+    const deadline = new Date(`${purchaseDate}T00:00:00`);
+    deadline.setDate(deadline.getDate() + windowDays);
+    deadlineDate = deadline.toISOString().split('T')[0];
+  }
+
+  const parsedPrice = Number.parseFloat(aiJson.price);
+  const allowedCategories = ['Electronics', 'Clothing', 'Home', 'Books', 'Other'];
+  const category = allowedCategories.includes(aiJson.category) ? aiJson.category : 'Other';
+
+  return {
+    store,
+    name: String(aiJson.name || '').trim(),
+    category,
+    price: Number.isFinite(parsedPrice) ? parsedPrice : 0,
+    purchaseDate,
+    windowDays,
+    deadlineDate,
+    orderId: String(aiJson.orderId || '').trim(),
+    method: store === 'Amazon' ? 'Amazon Locker / Whole Foods' : (store === 'Apple' ? 'In-Store Drop-off' : 'UPS / FedEx Drop-off'),
+    notes: `AI extracted from an uploaded ${store} receipt. Review before tracking.`
+  };
+}
+
+// Run AI Parameter Extraction with Gemini vision for images and local parsing for text.
 async function executeAiParse() {
-  const rawText = document.getElementById('ai-import-raw-text').value;
-  if (!rawText.trim()) {
-    showToast('Please paste order email text or load a sample first!', 'warning');
+  const rawText = document.getElementById('ai-import-raw-text').value.trim();
+  const hasReceiptImage = Boolean(currentReceiptImage);
+
+  if (!rawText && !hasReceiptImage) {
+    showToast('Paste an order email or choose a receipt image first.', 'warning');
     return;
   }
 
   const engineMode = localStorage.getItem(STORAGE_KEY_ENGINE) || 'local';
-  const apiKey = localStorage.getItem(STORAGE_KEY_API);
+  const apiKey = (localStorage.getItem(STORAGE_KEY_API) || '').trim();
+
+  if (hasReceiptImage && (engineMode !== 'gemini' || !apiKey)) {
+    showToast('Receipt images require Gemini Cloud mode and an API key in Settings.', 'warning');
+    return;
+  }
 
   let parsed = null;
-  let source = 'Client-Side NLP';
+  let source = 'Client-Side Text Parser';
+  const shouldUseGemini = engineMode === 'gemini' && Boolean(apiKey);
 
-  // If user configured Cloud Gemini mode and provided an API key
-  if (engineMode === 'gemini' && apiKey && apiKey.trim()) {
-    try {
-      showToast('Calling Google Gemini 1.5 Flash API...', 'info');
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`;
-      const prompt = `Extract return parameters from this order text into pure JSON matching this exact schema:
+  if (shouldUseGemini) {
+    const extractionPrompt = `Read the supplied receipt image and/or order text and return only JSON using this schema:
 {
-  "store": "Retailer name e.g. Amazon, Apple, Target",
-  "name": "Product title",
-  "price": 0.00,
-  "purchaseDate": "YYYY-MM-DD",
-  "windowDays": 30,
-  "orderId": "order number",
-  "category": "Electronics or Clothing or Home or Books or Other"
+  "store": "retailer shown on the receipt, or null",
+  "name": "all purchased item names with quantities in one short description, or null",
+  "price": "grand total actually paid as a number, or null",
+  "purchaseDate": "YYYY-MM-DD, or null",
+  "orderId": "order, transaction, or receipt identifier, or null",
+  "category": "Electronics, Clothing, Home, Books, or Other"
 }
-Order text:
-${rawText}`;
 
-      const resp = await fetch(geminiUrl, {
+Rules:
+- Use only information visibly present in the supplied content.
+- Never guess, substitute sample data, or invent a missing value.
+- Use the final grand total including tax, not a subtotal or individual item price.
+- If there are multiple items, include each item and quantity in the name field.
+- If a field is not visible, return null for that field.
+
+Order text, if supplied:
+${rawText || '(No text supplied. Read the attached receipt image.)'}`;
+
+    const parts = [{ text: extractionPrompt }];
+    if (hasReceiptImage) {
+      parts.push({
+        inline_data: {
+          mime_type: currentReceiptImage.mimeType,
+          data: currentReceiptImage.data
+        }
+      });
+    }
+
+    try {
+      showToast(hasReceiptImage ? 'Reading receipt image with Gemini vision...' : 'Reading order text with Gemini...', 'info');
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+      const response = await fetch(geminiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
+          contents: [{ parts }],
           generationConfig: { responseMimeType: 'application/json' }
         })
       });
 
-      if (resp.ok) {
-        const data = await resp.json();
-        const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (jsonText) {
-          const aiJson = JSON.parse(jsonText);
-          const pDate = new Date(aiJson.purchaseDate + 'T00:00:00');
-          pDate.setDate(pDate.getDate() + (aiJson.windowDays || 30));
-          parsed = {
-            store: aiJson.store || 'Online Retailer',
-            name: aiJson.name || 'Purchased Item',
-            category: aiJson.category || 'Electronics',
-            price: parseFloat(aiJson.price) || 0,
-            purchaseDate: aiJson.purchaseDate,
-            windowDays: parseInt(aiJson.windowDays) || 30,
-            deadlineDate: pDate.toISOString().split('T')[0],
-            orderId: aiJson.orderId || 'N/A',
-            method: 'Standard Return',
-            notes: 'AI Extracted via Google Gemini 1.5 Flash'
-          };
-          source = 'Gemini 1.5 Flash Cloud';
-        }
-      } else {
-        console.warn('Gemini API call failed, falling back to local NLP parser');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `Gemini request failed (${response.status})`);
       }
-    } catch (err) {
-      console.warn('Gemini API fetch error, fallback to local', err);
+
+      const data = await response.json();
+      const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!jsonText) throw new Error('Gemini returned no receipt data');
+
+      parsed = buildParsedItemFromAi(JSON.parse(jsonText));
+      source = hasReceiptImage ? 'Gemini Vision' : 'Gemini Text';
+    } catch (error) {
+      console.error('Gemini extraction failed', error);
+
+      if (hasReceiptImage) {
+        showToast(`Receipt could not be read: ${error.message}`, 'warning');
+        return;
+      }
+
+      showToast('Cloud extraction failed. Using the local text parser instead.', 'warning');
     }
   }
 
-  // Fallback to robust Client-Side NLP
-  if (!parsed) {
+  // Text can still use the local parser. Images never receive fabricated fallback data.
+  if (!parsed && rawText) {
     parsed = parseOrderText(rawText);
   }
 
   if (!parsed) {
-    showToast('Could not extract parameters. Try a clearer snippet or sample.', 'warning');
+    showToast('Could not extract receipt details. Try a clearer image or paste the order text.', 'warning');
     return;
   }
 
   currentParsedItem = parsed;
 
-  // Populate preview card
-  document.getElementById('preview-store').textContent = parsed.store;
-  document.getElementById('preview-name').textContent = parsed.name;
-  document.getElementById('preview-price').textContent = formatCurrency(parsed.price);
-  document.getElementById('preview-date').textContent = formatDate(parsed.purchaseDate);
-  document.getElementById('preview-order-id').textContent = parsed.orderId;
+  document.getElementById('preview-store').textContent = parsed.store || '--';
+  document.getElementById('preview-name').textContent = parsed.name || 'Not detected';
+  document.getElementById('preview-price').textContent = parsed.price ? formatCurrency(parsed.price) : 'Not detected';
+  document.getElementById('preview-date').textContent = parsed.purchaseDate ? formatDate(parsed.purchaseDate) : 'Not detected';
+  document.getElementById('preview-order-id').textContent = parsed.orderId || 'Not detected';
   document.getElementById('preview-policy-text').textContent = `${parsed.store} (${parsed.windowDays} Days)`;
-  document.getElementById('preview-deadline').textContent = formatDate(parsed.deadlineDate);
-  document.getElementById('ai-detected-confidence').textContent = `100% (${source})`;
+  document.getElementById('preview-deadline').textContent = parsed.deadlineDate ? formatDate(parsed.deadlineDate) : 'Needs purchase date';
+  document.getElementById('ai-detected-confidence').textContent = `${source} \u2022 review result`;
 
   document.getElementById('ai-preview-card').classList.remove('hidden');
-  showToast(`Parameters extracted via ${source}! Ready to add to tracker.`, 'success');
+  showToast(`Receipt details extracted via ${source}. Review before adding.`, 'success');
   lucide.createIcons();
 }
 
@@ -1397,15 +1517,18 @@ async function testApiKey() {
   }
   showToast('Testing Gemini API key connection...', 'info');
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': key
+      },
       body: JSON.stringify({
         contents: [{ parts: [{ text: 'Ping' }] }]
       })
     });
     if (res.ok) {
-      showToast('API Key connection successful! Gemini 1.5 Flash is active.', 'success');
+      showToast('API key connection successful! Gemini Flash is active.', 'success');
     } else {
       const errData = await res.json().catch(() => ({}));
       showToast(`Key check failed: ${errData.error?.message || 'Invalid API Key'}`, 'warning');
